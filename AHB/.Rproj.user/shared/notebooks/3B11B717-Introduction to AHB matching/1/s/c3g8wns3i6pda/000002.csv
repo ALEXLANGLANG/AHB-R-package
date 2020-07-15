@@ -1,0 +1,62 @@
+"0","AHB_fast_out <- AHB_fast_match(data = data, holdout = holdout)"
+"2","Cross-validating BART; should take a minute
+"
+"2","Running AHB_fast_matching
+"
+"1","Matching unit 1 of 23"
+"1","Matching unit 2 of 23"
+"1","Matching unit 3 of 23"
+"1","Matching unit 4 of 23"
+"1",""
+"1","Matching unit 5 of 23"
+"1","Matching unit 6 of 23"
+"1","Matching unit 7 of 23"
+"1","Matching unit 8 of 23"
+"1","Matching unit 9 of 23"
+"1","Matching unit 10 of 23"
+"1","Matching unit 11 of 23"
+"1","Matching unit 12 of 23"
+"1","Matching unit 13 of 23"
+"1","Matching unit 14 of 23"
+"1","Matching unit 15 of 23"
+"1","Matching unit 16 of 23"
+"1","Matching unit 17 of 23"
+"1","Matching unit 18 of 23"
+"1","Matching unit 19 of 23"
+"1","Matching unit 20 of 23"
+"1","Matching unit 21 of 23"
+"1",""
+"1","Matching unit 22 of 23"
+"1","Matching unit 23 of 23"
+"2","Time to match 23 units: 0.35 mins
+"
+"0","AHB_MIP_out <- AHB_MIP_match(data = data, holdout = holdout)"
+"2","Cross-validating BART; should take a minute
+"
+"2","Running AHB_MIP_matching
+"
+"2","Matching unit 1 of 23"
+"2","Matching unit 2 of 23"
+"2","Matching unit 3 of 23"
+"2","Matching unit 4 of 23"
+"2","Matching unit 5 of 23"
+"2","Matching unit 6 of 23"
+"2","Matching unit 7 of 23"
+"2","Matching unit 8 of 23"
+"2","Matching unit 9 of 23"
+"2","Matching unit 10 of 23"
+"2","Matching unit 11 of 23"
+"2","Matching unit 12 of 23"
+"2","Matching unit 13 of 23"
+"2","Matching unit 14 of 23"
+"2","Matching unit 15 of 23"
+"2","Matching unit 16 of 23"
+"2","Matching unit 17 of 23"
+"2","Matching unit 18 of 23"
+"2","Matching unit 19 of 23"
+"2","Matching unit 20 of 23"
+"2","Matching unit 21 of 23"
+"2","Matching unit 22 of 23"
+"2","Matching unit 23 of 23"
+"2","Time to match 23 units: 0.02 mins
+"
