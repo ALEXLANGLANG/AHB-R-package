@@ -31,14 +31,15 @@ Description: Efficient implementations of the algorithms in in causal inference 
     works for mixed categorical and continuous datasets, and produces low-variance matched
     groups that can be described with interpretable rules. For more information and examples,
     see the Almost-Matching-Exactly website. 
-License: 
+License: BSD
 Encoding: UTF-8
 LazyData: true
 Imports: 
     dbarts,
     Rcplex,
     Rcpp,
-    utils
+    utils,
+    Rglpk
 RoxygenNote: 7.1.0
 LinkingTo: 
     Rcpp

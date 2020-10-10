@@ -25,6 +25,7 @@ double get_greedy_CATE(IntegerVector MG, LogicalVector test_treatments,
   CATE = treated_outcomes / n_treated_in_MG - control_outcomes / n_control_in_MG;
   return(CATE);
 }
+// get variance of units for the same cov
 double get_var(NumericVector array){
   double var = 0;
   double mean = 0;
@@ -36,9 +37,16 @@ double get_var(NumericVector array){
   var = var/(array.size()-1);
   return var;
 }
+// get mean of all units in the box
+double get_mean(NumericVector array){
+  double mean = 0;
+  for(auto &i:array){mean += i;}
+  mean = mean/array.size();
+  return mean;
+}
 
 // [[Rcpp::export]]
-List greedy_cpp(NumericMatrix test_treated_covs, IntegerVector test_control, IntegerVector test_treated,
+List greedy_cpp(StringVector names, NumericMatrix test_treated_covs, IntegerVector test_control, IntegerVector test_treated,
                 NumericMatrix test_covs, LogicalVector test_treatments, NumericVector test_outcomes,
                 int variation, int n_req_matches, double multiplier, SEXP bart_fit0, SEXP bart_fit1,
                 NumericVector fhat0, NumericVector fhat1, Function expansion_variance_tmp,
@@ -49,10 +57,11 @@ List greedy_cpp(NumericMatrix test_treated_covs, IntegerVector test_control, Int
   int n_test = test_outcomes.size();
 
   NumericVector CATE(n_test_treated);
-
+  // contrainer to get upper, lower bounds and MG groups
   List all_A = List::create();
   List all_B = List::create();
   List all_MGs =  List::create();
+
   // NumericVector variances;
   double prev_var;
   int n_matched_controls;
@@ -60,7 +69,8 @@ List greedy_cpp(NumericMatrix test_treated_covs, IntegerVector test_control, Int
 
   // For each test-treated unit
   for (int i = 0; i < n_test_treated; i++) {
-    std::cout << "Matching unit " << i + 1 << " of " << n_test_treated << "\r" << std::flush;
+    Rcpp::Rcout  << "Matching unit " << i + 1 << " of " << n_test_treated << "\r" << std::flush;
+
     // Initialize the unit to be trivially in its own MG
     IntegerVector MG(1, test_treated[i]);
     n_matched_controls = 0;
@@ -68,14 +78,15 @@ List greedy_cpp(NumericMatrix test_treated_covs, IntegerVector test_control, Int
     NumericVector A = test_treated_covs(i, _);
     NumericVector B = test_treated_covs(i, _);
     NumericVector bin_var(p, 10000.0); // Variance of expansion along each cov
-    NumericVector bin_var_tmp(p, 10000.0);
-    //IntegerVector potential_matches(test_outcomes.size(),1);
+    double bin_error = 0; // error of expansion units in the whole box
 
+    //Preprocessing Data to only select those units near the treated unit
     int index = test_treated[i] + 1;
     IntegerVector cands = preprocess_cand(index, test_covs, test_treatments, bart_fit1, bart_fit0, fhat1, fhat0, n_prune);
     NumericMatrix test_covs_pre = preprocess_covs(cands, test_covs);
     cands = cands - 1;
     n_test = test_covs_pre.nrow();
+
     // While we haven't matched enough units
     do {
       //count_times = count_times+1;
@@ -89,8 +100,9 @@ List greedy_cpp(NumericMatrix test_treated_covs, IntegerVector test_control, Int
         potential_matches = setdiff(all_units, MG);
 
       }
-      else { exit(-1);}// To do
+      //else { exit(-1);}// To do
 
+      // traverse each cov to find the best direction to expand the box
       NumericVector proposed_bin(p); // Proposed bin endpoint for each cov
       for (int j = 0; j < p; j++) { // Find variance of expanding each cov
         NumericVector test_df_col = test_covs_pre(_, j);
@@ -135,12 +147,23 @@ List greedy_cpp(NumericMatrix test_treated_covs, IntegerVector test_control, Int
         proposed_bin[j] = closest_val_to_bin;
       }
       // 3. Test this new bin
-      NumericMatrix bin_mean = Rcpp::as<NumericMatrix>(expansion_variance_tmp(A, B, proposed_bin, bart_fit0, bart_fit1, 3));
-      for(int x = 0; x < p; x++){if(bin_var[x] != R_PosInf){bin_var[x] = get_var(bin_mean(x, _)) + get_var(bin_mean(x+p, _));}}
+      // Find a sample of data in the box we have now, and get the predicted outcomes
+      NumericMatrix pred_outcomes = Rcpp::as<NumericMatrix>(expansion_variance_tmp(names,A, B, proposed_bin, bart_fit0, bart_fit1, 3));
+
+      //get bin variance of the box
+      for(int x = 0; x < p; x++){if(bin_var[x] != R_PosInf){bin_var[x] = get_var(pred_outcomes(x, _)) + get_var(pred_outcomes(x+p, _));}}
+
+      // get average predicted outcomes in the box
+      // get bin_error
+      double average_pred_outcome = get_mean(pred_outcomes);
+      double treated_outcome =  test_outcomes[test_treated[i]];
+      bin_error = treated_outcome - average_pred_outcome;
+      if(bin_error < 0){bin_error = - bin_error;}
+
 
       int expand_along = which_min(bin_var); // what if all equal
       // Update bin
-      if (min(bin_var) < multiplier * prev_var || n_matched_controls < 1) {
+      if (min(bin_var)+ bin_error< multiplier * prev_var || n_matched_controls < 1) {
         if (proposed_bin[expand_along] < A[expand_along]) {// Expanded downwards
           A[expand_along] = proposed_bin[expand_along];
         }else {B[expand_along] = proposed_bin[expand_along];}
@@ -171,7 +194,7 @@ List greedy_cpp(NumericMatrix test_treated_covs, IntegerVector test_control, Int
       MG = unique(MG); // Can also get CATE in running fashion
       CATE[i] = get_greedy_CATE(MG, test_treatments, test_outcomes);
     }
-    while (min(bin_var) < multiplier * prev_var || n_matched_controls < 1);
+    while (min(bin_var)+ bin_error < multiplier * prev_var || n_matched_controls < 1);
 
     all_MGs.push_back(MG+1);
     all_A.push_back(A);
@@ -181,4 +204,3 @@ List greedy_cpp(NumericMatrix test_treated_covs, IntegerVector test_control, Int
   List ret = List::create(CATE, all_A, all_B,all_MGs);
   return(ret);
 }
-

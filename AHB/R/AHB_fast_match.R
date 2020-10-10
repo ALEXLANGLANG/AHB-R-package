@@ -1,10 +1,12 @@
-expansion_variance_tmp <- function(current_lower, current_upper,
+#Get the predicted outcomes of sample units in the box we constructed now
+expansion_variance_tmp <- function(name, current_lower, current_upper,
                                    proposed_bin, bart_fit0, bart_fit1, n_grid_pts = 8) {
 
   p <- length(current_lower)
   n <-n_grid_pts*p*p
   M <- matrix(c(1:n), nrow = n_grid_pts*p, byrow = TRUE)
 
+  #Get the sample data in the box
   for(cov in 1:p){
     new_val = proposed_bin[cov]
     if (new_val > current_upper[cov]) {grid_pts <- seq(current_upper[cov], new_val, length.out = n_grid_pts)
@@ -19,6 +21,10 @@ expansion_variance_tmp <- function(current_lower, current_upper,
     M[start_r:end_r,] <- pred_data
   }
 
+
+  df<-as.data.frame(M)
+  names(df)<-name
+  M <-df
   bin_mean = c(colMeans(predict(bart_fit1, M)),colMeans(predict(bart_fit0, M)))
 
   bin_mean = matrix(bin_mean, nrow = 2*p, byrow = TRUE)
@@ -136,7 +142,9 @@ AHB_fast_match<-function(data,
                          black_box = 'BART',
                          cv = F,
                          C = 1.1,
-                         n_prune = 50){
+                         n_prune = ifelse(is.numeric(holdout),
+                                          round(0.1*(1-holdout) * nrow(data)),
+                                          round(0.1*nrow(data)))){
 
   df <- read_data(data,holdout,treated_column_name,outcome_column_name)
   check_args_fast(data = df[[1]],holdout = df[[2]],
@@ -168,6 +176,12 @@ AHB_fast_match<-function(data,
 
 
   message("Running AHB_fast_matching")
+
+  if(n_prune >= 200){
+    message(paste0("If computation speed is very slow, please adjust
+the parameter 'n_prune' into smaller values.
+For now, n_prune = ", n_prune, ". Try to set n_prune below 400 or even smaller"))}
+
   start_time <- Sys.time()
   fast_bins <- vector(mode = 'list', length = 1)
   fast_cates = numeric(n_test_treated)
@@ -179,7 +193,7 @@ AHB_fast_match<-function(data,
   fhat1 = colMeans(predict(bart_fit1, newdata = test_covs))
   fhat0 = colMeans(predict(bart_fit0, newdata = test_covs))
 
-  greedy_out<-greedy_cpp(as.matrix(test_covs[test_treated, ]), test_control-1, test_treated-1,
+  greedy_out<-greedy_cpp(names(test_covs),as.matrix(test_covs[test_treated, ]), test_control-1, test_treated-1,
                          as.matrix(test_covs), as.logical(test_df_treated), test_df_outcome,
                          1, 15, C,bart_fit0, bart_fit1, fhat0, fhat1, expansion_variance_tmp,
                          preprocess_cands, preprocess_covs, n_prune)
@@ -191,8 +205,7 @@ AHB_fast_match<-function(data,
   MGs <- greedy_out[[4]]
 
   end_time <- Sys.time()
-  t = difftime(end_time, start_time, units = "mins")
+  t = difftime(end_time, start_time, units = "auto")
   message(paste0("Time to match ", length(test_treated), " units: ", format(round(t, 2), nsmall = 2) ))
-  return(list(data = test_df, units_id = test_treated, CATE = fast_cates, bins = fast_bins, MGs = MGs))
-
+  return(list(data = test_df, units_id = test_treated, CATE = fast_cates, bins = fast_bins, MGs = MGs, verbose = c(treated_column_name,outcome_column_name)))
 }

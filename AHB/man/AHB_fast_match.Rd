@@ -12,7 +12,8 @@ AHB_fast_match(
   black_box = "BART",
   cv = F,
   C = 1.1,
-  n_prune = 50
+  n_prune = ifelse(is.numeric(holdout), round(0.1 * (1 - holdout) * nrow(data)),
+    round(0.1 * nrow(data)))
 )
 }
 \arguments{

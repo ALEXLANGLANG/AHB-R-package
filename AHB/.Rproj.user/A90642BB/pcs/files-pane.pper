@@ -1,8 +1,8 @@
 {
-    "path" : "~/Desktop/AHB/R",
+    "path" : "~/Desktop/AME lab/new/AHB/R",
     "sortOrder" : [
         {
-            "ascending" : false,
+            "ascending" : true,
             "columnIndex" : 2
         }
     ]

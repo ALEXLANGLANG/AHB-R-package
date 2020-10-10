@@ -22,7 +22,10 @@ read_data <- function(data, holdout,
     holdout_inds <- sample(1:nrow(data), size = round(holdout * nrow(data)))
     holdout <- data[holdout_inds, ]
     data <- data[-holdout_inds, ]
+    rownames(data)<-NULL
+    rownames(holdout)<-NULL
   }
+
   return(list(data = data,
               holdout = holdout))
 }

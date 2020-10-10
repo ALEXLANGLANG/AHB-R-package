@@ -93,8 +93,8 @@
 #'  treated unit.} \item{MGs}{A list of all the matched groups formed by
 #'  AHB_fast_match. For each test treated unit, each row contains all unit_id of
 #'  the other units that fall into its box, including itself. } }
-#'@importFrom stats  predict rbinom rnorm var formula runif
-#'@importFrom utils combn flush.console
+#'@importFrom stats  predict rbinom rnorm var formula runif sd
+#'@importFrom utils combn flush.console read.csv
 #'@importFrom dbarts xbart bart
 #'@import Rcplex
 #'@import Rglpk
@@ -145,6 +145,28 @@ AHB_MIP_match<-function(data,
   bart_fit0 = inputs[[15]]
   bart_fit1 = inputs[[16]]
 
+
+  ind_treated <- which(colnames(test_df) == treated_column_name)
+  ind_outcome <- which(colnames(test_df) == outcome_column_name)
+  ind_integer <- c()
+  ind_other <- c()
+
+  #get the indexes of types of covariates to add different tolerance to them
+  count <- 1
+  for(x in 1:ncol(test_df)){
+    if(x != ind_treated  && x != ind_outcome){
+      if(all.equal(test_df[,x], as.integer(test_df[,x])) == TRUE){
+        ind_integer <- append(ind_integer, count)
+        count <- count + 1
+      }
+      else{
+        ind_other <- append(ind_other, count)
+        count <- count + 1
+      }
+    }
+  }
+
+
   ## BART
   fhat1 = colMeans(predict(bart_fit1, newdata = test_covs))
   fhat0 = colMeans(predict(bart_fit0, newdata = test_covs))
@@ -153,7 +175,6 @@ AHB_MIP_match<-function(data,
   mip_cates = numeric(n_test_treated[1])
   mip_bins = array(NA, c(n_test_treated, p, 2))
   mip_groups = list()
-
   sol = NULL
 
   message("Running AHB_MIP_matching")
@@ -207,8 +228,21 @@ For now, n_prune = ", n_prune, ". Try to set n_prune below 400 or even smaller")
     }
 
     mip_out = recover_pars(sol, n_train, nrow(test_covs), p)
-    mip_bins[l, ,1] = mip_out$a - 1e-10
-    mip_bins[l, ,2] = mip_out$b + 1e-10
+
+    mip_bins[l, ,1] = mip_out$a
+    mip_bins[l, ,2] = mip_out$b
+    #Add tolerance to different types
+    # add 1e-5 to integer type
+    if(length(ind_integer)!=0){
+      mip_bins[l,ind_integer,1] = mip_bins[l,ind_integer,1]- 1e-5
+      mip_bins[l,ind_integer,2] = mip_bins[l,ind_integer,2]+ 1e-5
+    }
+    # add 1e-10 to other type
+    if(length(ind_other)!=0){
+      mip_bins[l, ind_other,1] = mip_bins[l, ind_other,1] - 1e-10
+      mip_bins[l, ind_other,2] = mip_bins[l, ind_other,2] + 1e-10
+    }
+
     mg = make_mg(test_covs, mip_bins[l, ,1], mip_bins[l, ,2])
     mg = as.integer(mg)
     mip_groups[[l]] = mg
@@ -218,5 +252,5 @@ For now, n_prune = ", n_prune, ". Try to set n_prune below 400 or even smaller")
   t = difftime(end_time, start_time, units = "auto")
   message(paste0("Time to match ", length(test_treated), " units: ", format(round(t, 2), nsmall = 2)))
 
-  return(list(data = test_df,units_id = test_treated, CATE = mip_cates, bins = mip_bins, MGs = mip_groups))
+  return(list(data = test_df,units_id = test_treated, CATE = mip_cates, bins = mip_bins, MGs = mip_groups,verbose = c(treated_column_name,outcome_column_name)))
 }
