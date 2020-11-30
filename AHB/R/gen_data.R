@@ -1,3 +1,6 @@
+# author: Xian Sun, Duke University, 2020
+
+
 #' Generate Toy Data for AHB Matching
 #'
 #' \code{gen_data} generates toy data that can be used to explore AHB's

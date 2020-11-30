@@ -1,3 +1,4 @@
+# author: Xian Sun, Duke University, 2020
 
 estimator_inputs <- function(train_df, test_df,
                              treated_column_name = 'treated',outcome_column_name = 'outcome',

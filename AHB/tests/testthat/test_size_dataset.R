@@ -1,3 +1,5 @@
+# author: Xian Sun, Duke University, 2020
+
 # test_that("Try middle dataset on MIP ", {
 #   p <- 5
 #   data <-  gen_data(n_units = 1000, p = p)

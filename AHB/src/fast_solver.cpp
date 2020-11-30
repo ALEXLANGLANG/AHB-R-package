@@ -1,9 +1,13 @@
+//author: Xian Sun, Duke University, 2020
+
 #include <Rcpp.h>
 #include <algorithm>
 #include <chrono>
 #include <map>
 using namespace Rcpp;
 using std::find;
+
+
 double get_greedy_CATE(IntegerVector MG, LogicalVector test_treatments,
                        NumericVector test_outcomes) {
   // Computes the CATE, given a MG

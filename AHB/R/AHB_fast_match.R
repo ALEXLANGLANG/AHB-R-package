@@ -1,3 +1,7 @@
+# author: Xian Sun, Duke University, 2020
+
+
+
 #Get the predicted outcomes of sample units in the box we constructed now
 expansion_variance_tmp <- function(name, current_lower, current_upper,
                                    proposed_bin, bart_fit0, bart_fit1, n_grid_pts = 8) {
@@ -37,7 +41,9 @@ make_mg <- function(X, lbs, ubs){
   return(which(colMeans((t(X) <= ubs)*(t(X) >= lbs))==1))
 }
 
-
+#function used in Cpp
+#Preprocessing Data to only select those units near the treated unit
+#the output is a integer vector containing the indexes of units selected
 preprocess_cands <- function(i, test_covs, treatment, bart_fit1, bart_fit0, fhat1, fhat0, n_prune = 200){
   #Do preprocessing, only do MIP on varibales with most similar outcome
   ord = order(abs(fhat1[i] - fhat1)/sd(fhat1) + abs(fhat0[i] - fhat0)/sd(fhat0))
@@ -48,6 +54,8 @@ preprocess_cands <- function(i, test_covs, treatment, bart_fit1, bart_fit0, fhat
   return (cands)
 }
 
+#function used in Cpp
+#get the covs, given indexes from preprocess_cands
 preprocess_covs <- function(cands, test_covs){
   return (test_covs[cands, ])
 }

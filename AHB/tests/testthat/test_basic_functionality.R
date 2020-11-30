@@ -1,4 +1,4 @@
-
+# author: Xian Sun, Duke University, 2020
 test_that("column order doesn't matter", {
   p <- 4
   data <- gen_data(n_units = 50, p = p)

@@ -1,3 +1,5 @@
+# author: Xian Sun, Duke University, 2020
+
 read_data <- function(data, holdout,
                       treated_column_name, outcome_column_name) {
   if (is.character(data)) {

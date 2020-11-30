@@ -1,4 +1,4 @@
-
+# author: Xian Sun, Duke University, 2020
 test_that("holdout is not offered by users", {
   p <- 4
   data <- gen_data(n_units = 100, p = p)

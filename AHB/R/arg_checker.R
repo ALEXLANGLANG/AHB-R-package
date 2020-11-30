@@ -1,3 +1,5 @@
+# author: Xian Sun, Duke University, 2020
+
 check_treat_col_type<-function(data,data_cols, column_name){
   data_treat <- data[, which(data_cols == column_name)]
   for(l in 1:length(data_treat)){

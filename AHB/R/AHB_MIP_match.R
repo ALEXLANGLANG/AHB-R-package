@@ -1,3 +1,7 @@
+# author: Xian Sun, Duke University, 2020
+
+
+
 #'A MIP Implementation of AHB Matching
 #'
 #'\code{AHB_MIP_match} runs a MIP Implementation of AHB Matching
