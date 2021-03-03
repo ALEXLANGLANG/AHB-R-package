@@ -1,0 +1,37 @@
+# Use R language
+language: r
+#Define multiple R-versions, one from bioconductor
+r:
+  - oldrel
+  - release
+  - devel
+  - bioc-devel
+# Set one of you dependencies from github
+r_github_packages: 
+  - r-lib/testthat
+  - r-lib/covr
+env:
+    - PKG_TARBALL=RTest_1.2.3.1000.tar.gz
+    
+# Set one of your dependencies from CRAN
+r_packages:
+  - testthat
+  - stats
+  - Rcpp
+  - utils
+  - fastDummies
+  
+script:
+  - R CMD build . --compact-vignettes=gs+qpdf
+  - R CMD check *tar.gz --as-cran
+addons:
+  apt:
+    update: true
+    packages:
+      - libgs-dev
+      - qpdf
+      - ghostscript
+      
+after_success:
+      - tar -C .. -xf $PKG_TARBALL
+      - xvfb-run Rscript -e 'covr::codecov(type=c("tests", "vignettes", "examples"))'
