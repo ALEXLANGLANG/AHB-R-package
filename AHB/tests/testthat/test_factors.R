@@ -8,14 +8,14 @@ test_that("holdout is not offered by users", {
 
 #
 #
-test_that("Cross validation", {
-  p <- 4
-  data <- gen_data(n_units = 100, p = p)
-  fast_out <- AHB_fast_match(data = data, holdout = 0.5,cv = T)
-  fast_out <- AHB_fast_match(data = data, holdout = 0.5,cv = F)
-  MIP_out <- AHB_MIP_match(data = data, holdout = 0.5, cv = T)
-  MIP_out <- AHB_MIP_match(data = data, holdout = 0.5, cv = F)
-})
+# test_that("Cross validation", {
+#   p <- 4
+#   data <- gen_data(n_units = 100, p = p)
+  # fast_out <- AHB_fast_match(data = data, holdout = 0.5,cv = T)
+  # fast_out <- AHB_fast_match(data = data, holdout = 0.5,cv = F)
+  # MIP_out <- AHB_MIP_match(data = data, holdout = 0.5, cv = T)
+  # MIP_out <- AHB_MIP_match(data = data, holdout = 0.5, cv = F)
+# })
 
 test_that("Hpyerparameters for Fast", {
   p <- 4

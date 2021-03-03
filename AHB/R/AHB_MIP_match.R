@@ -43,7 +43,24 @@
 #'@param black_box Denotes the method to be used to generate outcome model Y.
 #' If "BART", use bartMachine as ML model to do prediction.
 #' If "xgb, use xgboost as ML model to do prediction.
-#'  Defaults to '"xgb"'.
+#'  Defaults to '"BART"'.
+#'
+#' @param user_PE_fit An optional function supplied by the user that can be used
+#'   instead of those allowed for by \code{PE_method} to fit a model for the
+#'   outcome from the covariates. Must take in a matrix of covariates as its
+#'   first argument and a vector outcome as its second argument. Defaults to
+#'   \code{NULL}.
+#' @param user_PE_fit_params A named list of optional parameters to be used by
+#'   \code{user_PE_fit}. Defaults to \code{NULL}.
+#' @param user_PE_predict An optional function supplied by the user that can be
+#'   used to generate predictions from the output of \code{user_PE_fit}. As its
+#'   first argument, must take an object of the type returned by
+#'  \code{user_PE_fit} and as its second, a matrix of values for which to
+#'  generate predictions. When the outcome is binary or multi-class, must
+#'  return the maximum probability class label. If not supplied,
+#'  defaults to \code{predict}.
+#' @param user_PE_predict_params A named list of optional parameters to be used
+#'   by \code{user_PE_predict}. Defaults to \code{NULL}.
 #'
 #'@param cv A logical scalar. If \code{TURE}, do cross-validation on the train
 #'  set to generate outcome model Y . Defaults to \code{TRUE}.
@@ -81,6 +98,24 @@
 #'  Optional, if "Rcplex", use Rcplex as solver, which is faster than Rglpk.
 #'  if "Rglpk", use Rglpk as solver, which is free and easy to be installed.
 #'
+#'
+#' @param missing_data Specifies how to handle missingness in \code{data}. If
+#'   'none' (default), assumes no missing data; if 'drop', effectively drops
+#'   units with missingness from the data and does not match them;
+#'   if 'impute', imputes the missing data via \code{mice::mice}.
+#' @param missing_holdout Specifies how to handle missingness in \code{holdout}.
+#'   If 'none' (default), assumes no missing data; if 'drop', effectively drops
+#'   units with missingness and does not use them to compute PE; and if 'impute',
+#'   imputes the missing data via \code{mice::mice}. In this last case, the PE
+#'   at an iteration will be given by the average PE across all imputations.
+#'
+#' @param impute_with_treatment A logical scalar. If \code{TRUE}, uses treatment
+#'   assignment to impute covariates when \code{missing_data = 'impute'} or
+#'   \code{missing_holdout = 'impute'}. Defaults to \code{TRUE}.
+#' @param impute_with_outcome A logical scalar. If \code{TRUE}, uses outcome
+#'   information to impute covariates when \code{missing_data = 'impute'} or
+#'   \code{missing_holdout = 'impute'}. Defaults to \code{FALSE}.
+#'
 #'@return The basic object returned by \code{AHB_MIP_match} is a list of 5
 #'  entries: \describe{\item{data}{Data set was matched by \code{AHB_MIP_match}.
 #'  If holdout is not a numeric value, the \code{AHB_MIP_out$data} is the same
@@ -96,8 +131,9 @@
 #'  AHB_fast_match. For each test treated unit, each row contains all unit_id of
 #'  the other units that fall into its box, including itself. } }
 
-#'@importFrom stats  predict rbinom rnorm var formula runif sd
+#'@importFrom stats  predict rbinom rnorm var formula runif sd complete.cases
 #'@importFrom utils combn flush.console read.csv
+#'@import fastDummies
 #'@export
 
 
@@ -105,28 +141,36 @@ AHB_MIP_match<-function(data,
                         holdout = 0.1,
                         treated_column_name = 'treated',
                         outcome_column_name = 'outcome',
-                        black_box="xgb",
-                        cv=F,
-                        gamma0=3,
-                        gamma1=3,
-                        beta=2,
-                        m=1,
-                        M=1e5,
+                        black_box="BART",
+                        user_PE_fit = NULL, user_PE_fit_params = NULL,
+                        user_PE_predict = NULL, user_PE_predict_params = NULL,
+                        cv=F,gamma0=3, gamma1=3, beta=2,m=1,M=1e5,
                         n_prune = ifelse(is.numeric(holdout),
                                          round(0.1*(1-holdout) * nrow(data)),
                                          round(0.1*nrow(data))),
-                        MIP_solver = "Rglpk"
+                        MIP_solver = "Rglpk",
+                        missing_data = 'none', missing_holdout = 'none',
+                        impute_with_treatment = TRUE, impute_with_outcome = FALSE
                         ){
 
   df <- read_data(data = data, holdout = holdout,
                   treated_column_name = treated_column_name, outcome_column_name = outcome_column_name)
 
-  check_args_MIP(data = df[[1]], holdout = df[[2]],
-                 treated_column_name = treated_column_name, outcome_column_name = outcome_column_name,
-                 black_box = black_box, cv = cv, gamma0 = gamma0, gamma1 = gamma1, beta = beta, m = m, M = M)
+  # check_args_MIP(data = df[[1]], holdout = df[[2]],
+  #                treated_column_name = treated_column_name, outcome_column_name = outcome_column_name,
+  #                black_box = black_box, cv = cv, gamma0 = gamma0, gamma1 = gamma1, beta = beta, m = m, M = M)
 
   # get outcome model with train set
-  inputs <- estimator_inputs(train_df = df[[2]], test_df = df[[1]],
+  train_ <-handle_missing(df[[2]], "training dataset", missing_holdout,
+                          treated_column_name, outcome_column_name,
+                          impute_with_treatment, impute_with_outcome)
+  test_ <- handle_missing(df[[1]], "testing dataset", missing_data,
+                          treated_column_name, outcome_column_name,
+                          impute_with_treatment, impute_with_outcome)
+
+  inputs <- estimator_inputs(train_df = train_, test_df = test_,
+                             user_PE_fit = user_PE_fit, user_PE_fit_params = user_PE_fit_params,
+                             user_PE_predict = user_PE_predict, user_PE_predict_params = user_PE_predict_params,
                              treated_column_name= treated_column_name, outcome_column_name=outcome_column_name,
                              black_box =  black_box, cv = cv)
   f = inputs[[1]]
@@ -168,23 +212,24 @@ AHB_MIP_match<-function(data,
   }
 
 
-  ## BART
-  # fhat1 = colMeans(predict(bart_fit1, newdata = test_covs))
-  # fhat0 = colMeans(predict(bart_fit0, newdata = test_covs))
-  # fhat1 = predict(bart_fit1, test_covs)
-  # fhat0 = predict(bart_fit0, test_covs)
   fhat1 = 0
   fhat0 = 0
-  if (black_box=='xgb' | black_box=='LASSO'){
-    fhat1 = predict(bart_fit1, as.matrix(test_covs))
-    fhat0 = predict(bart_fit0, as.matrix(test_covs))
+  PE_predict <- predict
+  PE_predict_params <- user_PE_predict_params
+  # assign("PE_predict_params", PE_predict_params, envir = .GlobalEnv)
+
+  if(!is.null(user_PE_predict)){
+    PE_predict <- user_PE_predict
   }
-  else if(black_box=='BART'){
-    fhat1 = predict(bart_fit1, test_covs)
-    fhat0 = predict(bart_fit0, test_covs)
+
+  fhat1 <- do.call(PE_predict, c(list(bart_fit1, as.matrix(test_covs)), PE_predict_params))
+  fhat0 <- do.call(PE_predict, c(list(bart_fit0, as.matrix(test_covs)), PE_predict_params))
+  if(black_box=='BART' && is.null(user_PE_predict) && is.null(user_PE_fit)){
+    fhat1<- colMeans(fhat1)
+    fhat0<- colMeans(fhat0)
   }
-  # print(fhat1)
-  # print(fhat0)
+
+
   #MIP
   mip_cates = numeric(n_test_treated[1])
   mip_bins = array(NA, c(n_test_treated, p, 2))
