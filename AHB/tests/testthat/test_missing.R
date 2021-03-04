@@ -5,11 +5,10 @@ if (!requireNamespace("assert", quietly = TRUE)) {
   return(NULL)
 }
 
-gen_missing <- function(){
-  data <- gen_data()
+gen_missing <- function(n=100,p=5){
+  data <- gen_data(n,p)
   data[1,"X1"] <- NA
   data[2,"X2"] <- NA
-  data["X3"] = as.factor(letters[1:100])
   data["X4"] <- 1
   data[c(1,2,3,4),"X4"]<-0
   data["X4"] <-

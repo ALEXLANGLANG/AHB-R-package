@@ -42,7 +42,7 @@
 #'
 #'@param black_box Denotes the method to be used to generate outcome model Y.
 #' If "BART", use bartMachine as ML model to do prediction.
-#' If "xgb, use xgboost as ML model to do prediction.
+#' If "xgb", use xgboost as ML model to do prediction.
 #'  Defaults to '"BART"'.
 #'
 #' @param user_PE_fit An optional function supplied by the user that can be used
@@ -141,7 +141,7 @@ AHB_MIP_match<-function(data,
                         holdout = 0.1,
                         treated_column_name = 'treated',
                         outcome_column_name = 'outcome',
-                        black_box="BART",
+                        black_box="xgb",
                         user_PE_fit = NULL, user_PE_fit_params = NULL,
                         user_PE_predict = NULL, user_PE_predict_params = NULL,
                         cv=F,gamma0=3, gamma1=3, beta=2,m=1,M=1e5,
@@ -161,26 +161,24 @@ AHB_MIP_match<-function(data,
   #                black_box = black_box, cv = cv, gamma0 = gamma0, gamma1 = gamma1, beta = beta, m = m, M = M)
 
   # get outcome model with train set
+  df[[2]] <- mapCategoricalToFactor(df[[2]],treated_column_name, outcome_column_name)
+  df[[1]] <- mapCategoricalToFactor(df[[1]],treated_column_name, outcome_column_name)
   train_ <-handle_missing(df[[2]], "training dataset", missing_holdout,
                           treated_column_name, outcome_column_name,
                           impute_with_treatment, impute_with_outcome)
   test_ <- handle_missing(df[[1]], "testing dataset", missing_data,
                           treated_column_name, outcome_column_name,
                           impute_with_treatment, impute_with_outcome)
+  train_dummy<- mapFactorToDummy(train_, treated_column_name, outcome_column_name)
+  test_dummy <- mapFactorToDummy(test_, treated_column_name, outcome_column_name)
 
-  inputs <- estimator_inputs(train_df = train_, test_df = test_,
+  inputs <- estimator_inputs(train_df = train_dummy, test_df = test_dummy,
                              user_PE_fit = user_PE_fit, user_PE_fit_params = user_PE_fit_params,
                              user_PE_predict = user_PE_predict, user_PE_predict_params = user_PE_predict_params,
                              treated_column_name= treated_column_name, outcome_column_name=outcome_column_name,
                              black_box =  black_box, cv = cv)
-  f = inputs[[1]]
-  n = inputs[[2]]
   n_train = inputs[[3]]
   p = inputs[[4]]
-  train_df = inputs[[5]]
-  train_covs = inputs[[6]]
-  train_control = inputs[[7]]
-  train_treated= inputs[[8]]
   test_df = inputs[[9]]
   test_covs = inputs[[10]]
   test_control = inputs[[11]]
@@ -189,7 +187,6 @@ AHB_MIP_match<-function(data,
   n_test_treated = inputs[[14]]
   bart_fit0 = inputs[[15]]
   bart_fit1 = inputs[[16]]
-
 
   ind_treated <- which(colnames(test_df) == treated_column_name)
   ind_outcome <- which(colnames(test_df) == outcome_column_name)
@@ -224,6 +221,7 @@ AHB_MIP_match<-function(data,
 
   fhat1 <- do.call(PE_predict, c(list(bart_fit1, as.matrix(test_covs)), PE_predict_params))
   fhat0 <- do.call(PE_predict, c(list(bart_fit0, as.matrix(test_covs)), PE_predict_params))
+
   if(black_box=='BART' && is.null(user_PE_predict) && is.null(user_PE_fit)){
     fhat1<- colMeans(fhat1)
     fhat0<- colMeans(fhat0)
@@ -245,6 +243,7 @@ For now, n_prune = ", n_prune, ". Try to set n_prune below 400 or even smaller")
 
   start_time <- Sys.time()
   for (l in 1:n_test_treated){
+
     i = test_treated[l]
     message(paste("Matching unit", l, "of", n_test_treated), "\r", appendLF = FALSE)
     test_df_treated = test_df[,which(colnames(test_df) == treated_column_name)]
@@ -272,8 +271,7 @@ For now, n_prune = ", n_prune, ". Try to set n_prune below 400 or even smaller")
     if(MIP_solver == "Rcplex"){
       #The following will enbale users to install MIP_solver optionally
       if (!requireNamespace("Rcplex", quietly = TRUE)) {
-           warning("The Rcplex package must be installed if you use Rcplex solver")
-           return(NULL)
+          stop("The Rcplex package must be installed if you use Rcplex solver")
        }
       sol <- do.call(Rcplex::Rcplex, c(mip_pars, list(objsense="max", control=list(trace=0))))
       sol <- sol$xopt
@@ -281,8 +279,7 @@ For now, n_prune = ", n_prune, ". Try to set n_prune below 400 or even smaller")
 
     if(MIP_solver == "Rglpk"){
       if (!requireNamespace("Rglpk", quietly = TRUE)) {
-           warning("The Rglpk package must be installed if you use Rglpk solver")
-           return(NULL)
+           stop("The Rglpk package must be installed if you use Rglpk solver")
        }
       dir = mip_pars$sense
       dir[which(dir =="G")] <- ">="

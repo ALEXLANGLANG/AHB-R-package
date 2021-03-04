@@ -47,5 +47,26 @@ gen_data <- function(n_units=100, p=4){
 }
 
 
+gen_mixedData<-function(n_units=100, p = 4){
+  beta0 <- 2 # Baseline response
+  beta_tilde <- 5 # treatment effect
+  p_numeric <- p/2
+  p_categorical <- p - p_numeric
+  beta <- runif(p, -1, 1) # To go from X_numeric to propensity score
 
+  ## For generating propensity scores and assigning treatment
+  X_numeric <- matrix(runif(p_numeric * n_units, -5, 5), nrow = n_units)
+  X_categorical <- matrix(rbinom(p_categorical * n_units, 1, 0.5), ncol = p_categorical, nrow = n_units)
+  ## Generate outcome
+  eps <- rnorm(n_units, 0, 1)
+  Z <- rbinom(n_units, 1, 0.5)
+  Y1 <- beta0 + (X_numeric[, 1] > 1.5) * beta_tilde + eps
+  Y0 <- beta0  + eps
+  Y = Y1 * Z + Y0 * (1-Z)
+
+  df <- cbind(data.frame(X_numeric),data.frame(X_categorical))
+  colnames(df)<-NULL
+  df <- cbind(df,data.frame(outcome = Y, treated = Z))
+  return(data = df)
+}
 

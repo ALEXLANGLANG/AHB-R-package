@@ -9,7 +9,7 @@ AHB_fast_match(
   holdout = 0.1,
   treated_column_name = "treated",
   outcome_column_name = "outcome",
-  black_box = "BART",
+  black_box = "xgb",
   user_PE_fit = NULL,
   user_PE_fit_params = NULL,
   user_PE_predict = NULL,

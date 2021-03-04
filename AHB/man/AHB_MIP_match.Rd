@@ -9,7 +9,7 @@ AHB_MIP_match(
   holdout = 0.1,
   treated_column_name = "treated",
   outcome_column_name = "outcome",
-  black_box = "BART",
+  black_box = "xgb",
   user_PE_fit = NULL,
   user_PE_fit_params = NULL,
   user_PE_predict = NULL,
@@ -58,7 +58,7 @@ holdout and also in data, if supplied in the latter. Defaults to 'outcome'.}
 
 \item{black_box}{Denotes the method to be used to generate outcome model Y.
 If "BART", use bartMachine as ML model to do prediction.
-If "xgb, use xgboost as ML model to do prediction.
+If "xgb", use xgboost as ML model to do prediction.
  Defaults to '"BART"'.}
 
 \item{user_PE_fit}{An optional function supplied by the user that can be used
