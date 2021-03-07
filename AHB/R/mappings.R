@@ -17,11 +17,16 @@ mapFactorToDummy <- function(data, treated_column_name, outcome_column_name){
   if (!requireNamespace("fastDummies", quietly = TRUE)) {
     stop("The fastDummies package must be installed")
   }
+  listDummyCol <- list()
   colNames <- colnames(data)
   data_dummy <- NULL
-  for(cov in colNames){
+  ind <- 1
+  for(i in 1:length(colNames)){
+    cov = colNames[i]
     if(is.factor(data[,cov]) && !(cov %in% c(treated_column_name, outcome_column_name))){
       toAdd <- fastDummies::dummy_cols(data[cov], remove_selected_columns=TRUE)
+      listDummyCol[[ind]] <- collectColNames(cov, colnames(toAdd))
+      ind <- ind + 1
     }
     else{
       toAdd<-data[cov]
@@ -33,6 +38,19 @@ mapFactorToDummy <- function(data, treated_column_name, outcome_column_name){
       data_dummy<-cbind(data_dummy,toAdd)
     }
   }
-  return (data_dummy)
+  return (list(data_dummy = data_dummy,listDummyCol = listDummyCol))
 }
 
+#This helps to remove the original column name from the dummy column
+removeHeadString<- function(headStr, totalStr){
+  return (substr(totalStr, nchar(headStr)+2, nchar(totalStr)))
+}
+
+#This collects the dummy columNames
+collectColNames<- function(headStr, colNames){
+  list_names <- c()
+  for(i in 1:sum(lengths(colNames))){
+    list_names[i] <- removeHeadString(headStr, colNames[i])
+  }
+  return (list_names)
+}

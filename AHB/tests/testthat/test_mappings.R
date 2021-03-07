@@ -26,9 +26,18 @@ test_that("mapFactorToDummy ", {
   data[c(1:4),"X2"] <- 0
   data <- mapCategoricalToFactor(data,treated_column_name = 'treated',outcome_column_name = 'outcome')
   data <- handle_missing(data,"data",missing_data = "drop",'treated','outcome', T, F)
-  data_dummy <- mapFactorToDummy(data, 'treated','outcome')
+  res <- mapFactorToDummy(data, 'treated','outcome')
+  data_dummy <- res[[1]]
+  listDummyCol<-res[[2]]
   expect_equal(is.double(data_dummy[,"X1"]), TRUE)
   expect_equal(is.numeric(data_dummy[,"X2"]) , TRUE)
   expect_equal(is.numeric(data_dummy[,"X3_z"]), TRUE)
   expect_equal(is.numeric(data_dummy[,"X4_a"]), TRUE)
+})
+
+
+test_that("collectColNames ", {
+  colNames = c("a_1", "a_2", "a_3")
+  res <- collectColNames("a", colNames)
+  expect_equal(c("1", "2", "3"), res)
 })

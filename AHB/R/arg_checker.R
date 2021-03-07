@@ -12,6 +12,7 @@ check_treat_col_type<-function(data,data_cols, column_name){
 check_args_fast <-function(data, holdout,
                            treated_column_name, outcome_column_name,
                            black_box,cv, C){
+  #Cov name should be unique
 
   if (!is.data.frame(data)) {
     stop(paste('data must be a data frame or a character denoting a .csv file',

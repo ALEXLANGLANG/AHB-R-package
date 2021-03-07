@@ -169,8 +169,10 @@ AHB_MIP_match<-function(data,
   test_ <- handle_missing(df[[1]], "testing dataset", missing_data,
                           treated_column_name, outcome_column_name,
                           impute_with_treatment, impute_with_outcome)
-  train_dummy<- mapFactorToDummy(train_, treated_column_name, outcome_column_name)
-  test_dummy <- mapFactorToDummy(test_, treated_column_name, outcome_column_name)
+  map1<- mapFactorToDummy(train_, treated_column_name, outcome_column_name)
+  train_dummy<- map1[[1]]
+  list_dummyCols <- map1[[2]]
+  test_dummy <- mapFactorToDummy(test_, treated_column_name, outcome_column_name)[[1]]
 
   inputs <- estimator_inputs(train_df = train_dummy, test_df = test_dummy,
                              user_PE_fit = user_PE_fit, user_PE_fit_params = user_PE_fit_params,
@@ -187,46 +189,21 @@ AHB_MIP_match<-function(data,
   n_test_treated = inputs[[14]]
   bart_fit0 = inputs[[15]]
   bart_fit1 = inputs[[16]]
-
-  ind_treated <- which(colnames(test_df) == treated_column_name)
-  ind_outcome <- which(colnames(test_df) == outcome_column_name)
-  ind_integer <- c()
-  ind_other <- c()
-
-  #get the indexes of types of covariates to add different tolerance to them
-  count <- 1
-  for(x in 1:ncol(test_df)){
-    if(x != ind_treated  && x != ind_outcome){
-      if(all.equal(test_df[,x], as.integer(test_df[,x])) == TRUE){
-        ind_integer <- append(ind_integer, count)
-        count <- count + 1
-      }
-      else{
-        ind_other <- append(ind_other, count)
-        count <- count + 1
-      }
-    }
-  }
-
-
   fhat1 = 0
   fhat0 = 0
   PE_predict <- predict
   PE_predict_params <- user_PE_predict_params
-  # assign("PE_predict_params", PE_predict_params, envir = .GlobalEnv)
+  indexesForIntAndOther <- getColIndexForINTandOther(test_df,treated_column_name,outcome_column_name)
 
   if(!is.null(user_PE_predict)){
     PE_predict <- user_PE_predict
   }
-
   fhat1 <- do.call(PE_predict, c(list(bart_fit1, as.matrix(test_covs)), PE_predict_params))
   fhat0 <- do.call(PE_predict, c(list(bart_fit0, as.matrix(test_covs)), PE_predict_params))
-
   if(black_box=='BART' && is.null(user_PE_predict) && is.null(user_PE_fit)){
     fhat1<- colMeans(fhat1)
     fhat0<- colMeans(fhat0)
   }
-
 
   #MIP
   mip_cates = numeric(n_test_treated[1])
@@ -248,7 +225,6 @@ For now, n_prune = ", n_prune, ". Try to set n_prune below 400 or even smaller")
     message(paste("Matching unit", l, "of", n_test_treated), "\r", appendLF = FALSE)
     test_df_treated = test_df[,which(colnames(test_df) == treated_column_name)]
     test_df_outcome = test_df[,which(colnames(test_df) == outcome_column_name)]
-
     #Do preprocessing, only do MIP on varibales with most similar outcome
     ord = order(abs(fhat1[i] - fhat1) * gamma1/sd(fhat1) + abs(fhat0[i] - fhat0) * gamma0/sd(fhat0))
     cands = c(ord[test_df$treated[ord]==1][2:n_prune], ord[test_df$treated[ord]==0][1:n_prune])
@@ -256,7 +232,6 @@ For now, n_prune = ", n_prune, ". Try to set n_prune below 400 or even smaller")
 
     #do MIP without preprocessing
     if(nrow(test_df) <= 400){cands = -i}
-
     mip_pars =  setup_miqp_fhat(xi = as.numeric(test_covs[i, ]),
                                 x_test = as.matrix(test_covs[cands, ]),
                                 z_test = test_df_treated[cands],
@@ -293,20 +268,9 @@ For now, n_prune = ", n_prune, ". Try to set n_prune below 400 or even smaller")
     }
 
     mip_out = recover_pars(sol, n_train, nrow(test_covs), p)
-
     mip_bins[l, ,1] = mip_out$a
     mip_bins[l, ,2] = mip_out$b
-    #Add tolerance to different types
-    # add 1e-5 to integer type
-    if(length(ind_integer)!=0){
-      mip_bins[l,ind_integer,1] = mip_bins[l,ind_integer,1]- 1e-5
-      mip_bins[l,ind_integer,2] = mip_bins[l,ind_integer,2]+ 1e-5
-    }
-    # add 1e-10 to other type
-    if(length(ind_other)!=0){
-      mip_bins[l, ind_other,1] = mip_bins[l, ind_other,1] - 1e-10
-      mip_bins[l, ind_other,2] = mip_bins[l, ind_other,2] + 1e-10
-    }
+    mip_bins <- addToleranceToBounds(mip_bins,l,indexesForIntAndOther)
 
     mg = make_mg(test_covs, mip_bins[l, ,1], mip_bins[l, ,2])
     mg = as.integer(mg)
@@ -316,6 +280,56 @@ For now, n_prune = ", n_prune, ". Try to set n_prune below 400 or even smaller")
   end_time <- Sys.time()
   t = difftime(end_time, start_time, units = "auto")
   message(paste0("Time to match ", length(test_treated), " units: ", format(round(t, 2), nsmall = 2)))
-
-  return(list(data = test_df,units_id = test_treated, CATE = mip_cates, bins = mip_bins, MGs = mip_groups,verbose = c(treated_column_name,outcome_column_name)))
+  return(list(data = test_, data_dummy = test_df,units_id = test_treated, CATE = mip_cates, bins = mip_bins, MGs = mip_groups, list_dummyCols = list_dummyCols,verbose = c(treated_column_name,outcome_column_name)))
 }
+
+
+
+#Get the column indexes for INT (Catgorical column) and Other (Numeric column)
+getColIndexForINTandOther<- function(test_df,treated_column_name,outcome_column_name){
+  ind_treated <- which(colnames(test_df) == treated_column_name)
+  ind_outcome <- which(colnames(test_df) == outcome_column_name)
+  ind_integer <- c()
+  ind_other <- c()
+  #get the indexes of types of covariates to add different tolerance to them
+  count <- 1
+  for(x in 1:ncol(test_df)){
+    if(x != ind_treated  && x != ind_outcome){
+      if(all.equal(test_df[,x], as.integer(test_df[,x])) == TRUE){
+        ind_integer <- append(ind_integer, count)
+        count <- count + 1
+      }
+      else{
+        ind_other <- append(ind_other, count)
+        count <- count + 1
+      }
+    }
+  }
+  return (list(ind_integer = ind_integer, ind_other = ind_other))
+}
+
+
+#Add the tolerance to column with different types
+#To categorical column (INT type ) with 1e-5
+#To numeric coulum (Other type ) with  1e-10
+addToleranceToBounds<-function(mip_bins,l,indexesForIntAndOther){
+  ind_integer = indexesForIntAndOther$ind_integer
+  ind_other = indexesForIntAndOther$ind_other
+
+  #Add tolerance to different types
+  # add 1e-5 to integer type
+  if(length(ind_integer)!=0){
+    mip_bins[l,ind_integer,1] = mip_bins[l,ind_integer,1]- 1e-5
+    mip_bins[l,ind_integer,2] = mip_bins[l,ind_integer,2]+ 1e-5
+  }
+  # add 1e-10 to other type
+  if(length(ind_other)!=0){
+    mip_bins[l, ind_other,1] = mip_bins[l, ind_other,1] - 1e-10
+    mip_bins[l, ind_other,2] = mip_bins[l, ind_other,2] + 1e-10
+  }
+  return (mip_bins)
+}
+
+
+
+

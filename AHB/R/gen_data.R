@@ -57,6 +57,8 @@ gen_mixedData<-function(n_units=100, p = 4){
   ## For generating propensity scores and assigning treatment
   X_numeric <- matrix(runif(p_numeric * n_units, -5, 5), nrow = n_units)
   X_categorical <- matrix(rbinom(p_categorical * n_units, 1, 0.5), ncol = p_categorical, nrow = n_units)
+  X_categorical[,1]<-"male"
+  X_categorical[c(1,2,3,4,5),1] <-"female"
   ## Generate outcome
   eps <- rnorm(n_units, 0, 1)
   Z <- rbinom(n_units, 1, 0.5)

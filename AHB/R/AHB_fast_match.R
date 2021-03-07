@@ -10,7 +10,6 @@ expansion_variance_tmp <- function(name, black_box, current_lower, current_upper
   p <- length(current_lower)
   n <-n_grid_pts*p*p
   M <- matrix(c(1:n), nrow = n_grid_pts*p, byrow = TRUE)
-
   #Get the sample data in the box
   for(cov in 1:p){
     new_val = proposed_bin[cov]
@@ -25,7 +24,6 @@ expansion_variance_tmp <- function(name, black_box, current_lower, current_upper
     end_r = start_r+n_grid_pts-1
     M[start_r:end_r,] <- pred_data
   }
-
 
   df<-as.data.frame(M)
   names(df)<-name
@@ -43,7 +41,7 @@ expansion_variance_tmp <- function(name, black_box, current_lower, current_upper
 }
 
 
-
+#Construct a matched group with covs and lower and higher bounds
 make_mg <- function(X, lbs, ubs){
   return(which(colMeans((t(X) <= ubs)*(t(X) >= lbs))==1))
 }
@@ -203,38 +201,34 @@ AHB_fast_match<-function(data,
   # check_args_fast(data = df[[1]],holdout = df[[2]],
   #                 treated_column_name=treated_column_name, outcome_column_name=outcome_column_name,
   #                 black_box = black_box, cv = cv, C = C)
+  df[[2]] <- mapCategoricalToFactor(df[[2]],treated_column_name, outcome_column_name)
+  df[[1]] <- mapCategoricalToFactor(df[[1]],treated_column_name, outcome_column_name)
   train_ <-handle_missing(df[[2]], "training dataset", missing_holdout,
-                                    treated_column_name, outcome_column_name,
-                                    impute_with_treatment, impute_with_outcome)
+                          treated_column_name, outcome_column_name,
+                          impute_with_treatment, impute_with_outcome)
   test_ <- handle_missing(df[[1]], "testing dataset", missing_data,
-                            treated_column_name, outcome_column_name,
-                            impute_with_treatment, impute_with_outcome)
+                          treated_column_name, outcome_column_name,
+                          impute_with_treatment, impute_with_outcome)
+  map1<- mapFactorToDummy(train_, treated_column_name, outcome_column_name)
+  train_dummy<- map1[[1]]
+  list_dummyCols <- map1[[2]]
+  test_dummy <- mapFactorToDummy(test_, treated_column_name, outcome_column_name)[[1]]
 
-  inputs <- estimator_inputs(train_df = train_, test_df = test_,
+  inputs <- estimator_inputs(train_df = train_dummy, test_df = test_dummy,
                              user_PE_fit = user_PE_fit, user_PE_fit_params = user_PE_fit_params,
                              user_PE_predict = user_PE_predict, user_PE_predict_params = user_PE_predict_params,
                              treated_column_name= treated_column_name, outcome_column_name=outcome_column_name,
                              black_box =  black_box, cv = cv)
 
-  f <- inputs[[1]]
-  n <- inputs[[2]]
-  n_train <- inputs[[3]]
-  p <- inputs[[4]]
-  train_df <- inputs[[5]]
-  train_covs <- inputs[[6]]
-  train_control <- inputs[[7]]
-
-  train_treated <- inputs[[8]]
-  test_df <- inputs[[9]]
-  test_covs <- inputs[[10]]
-  test_control <- inputs[[11]]
-  test_treated <- inputs[[12]]
-  n_test_control <- inputs[[13]]
-  n_test_treated <- inputs[[14]]
-  bart_fit0 <- inputs[[15]]
-  bart_fit1 <- inputs[[16]]
-  #counterfactuals <- inputs[[17]]
-
+  p = inputs[[4]]
+  test_df = inputs[[9]]
+  test_covs = inputs[[10]]
+  test_control = inputs[[11]]
+  test_treated = inputs[[12]]
+  n_test_control = inputs[[13]]
+  n_test_treated = inputs[[14]]
+  bart_fit0 = inputs[[15]]
+  bart_fit1 = inputs[[16]]
 
   message("Running AHB_fast_matching")
 
@@ -250,22 +244,15 @@ For now, n_prune = ", n_prune, ". Try to set n_prune below 400 or even smaller")
   #Greedy
   test_df_treated <- test_df[, which(colnames(test_df) == treated_column_name)]
   test_df_outcome <- test_df[, which(colnames(test_df) == outcome_column_name)]
-
-  # fhat1 = colMeans(predict(bart_fit1, newdata = test_covs))
-  # fhat0 = colMeans(predict(bart_fit0, newdata = test_covs))
-  # fhat1 = predict(bart_fit1, test_covs)
-  # fhat0 = predict(bart_fit0, test_covs)
   fhat1 = 0
   fhat0 = 0
   PE_predict <- predict
   PE_predict_params <- user_PE_predict_params
-
-  assign("PE_predict_params", PE_predict_params, envir = .GlobalEnv)
+  assign("PE_predict_params", PE_predict_params, envir = .GlobalEnv)# Make PE_predict_params as globalEnv for greedy_cpp
 
   if(!is.null(user_PE_predict)){
     PE_predict <- user_PE_predict
   }
-
   fhat1 <- do.call(PE_predict, c(list(bart_fit1, as.matrix(test_covs)), PE_predict_params))
   fhat0 <- do.call(PE_predict, c(list(bart_fit0, as.matrix(test_covs)), PE_predict_params))
   if(black_box=='BART' && is.null(user_PE_predict) && is.null(user_PE_fit)){
@@ -284,9 +271,8 @@ For now, n_prune = ", n_prune, ". Try to set n_prune below 400 or even smaller")
   upper_bounds <- do.call(rbind, greedy_out[[3]])
   fast_bins <- array(c(lower_bounds, upper_bounds), dim = c(dim(lower_bounds), 2))
   MGs <- greedy_out[[4]]
-
   end_time <- Sys.time()
   t = difftime(end_time, start_time, units = "auto")
   message(paste0("Time to match ", length(test_treated), " units: ", format(round(t, 2), nsmall = 2) ))
-  return(list(data = test_df, units_id = test_treated, CATE = fast_cates, bins = fast_bins, MGs = MGs, verbose = c(treated_column_name,outcome_column_name)))
+  return(list(data = test_, data_dummy = test_df,units_id = test_treated, CATE = fast_cates, bins = fast_bins, MGs = MGs,list_dummyCols = list_dummyCols, verbose = c(treated_column_name,outcome_column_name)))
 }
