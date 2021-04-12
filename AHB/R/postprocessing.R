@@ -77,7 +77,85 @@ ATT <- function(AHB_out) {
 }
 
 
+#'
+#'
+#' \code{print_box}  prints the box info on original covariates
+#'  constructed based on a specific treated unit.
+#'
+#' @param AHB_out An object returned by running \code{\link{AHB_fast_match}} and
+#'   \code{\link{AHB_MIP_match}}
+#' @param treated_unit_id is the treated unit id
+#' @param returnValue is if we return the info or not
+#' @return a list that contains the box info
+#' @export
+print_box<-function(AHB_out, treated_unit_id, returnValue = F ){
+  treated_unit_ids <-AHB_out$treated_unit_ids
+  if(!(treated_unit_id %in% treated_unit_ids)){
+    stop("Please input a valid treated unit id.\n")
+  }
+  infoList = list ()
+  cat(paste0("Unit ",treated_unit_id, " matches to units with: " ,"\n"))
+  data <- AHB_out$data
+  bins <- AHB_out$bins
+  data_dummy <- AHB_out$data_dummy
+  list_dummyCols <- AHB_out$list_dummyCols
+  treated_column_name <- AHB_out$verbose[[1]]
+  outcome_column_name <- AHB_out$verbose[[2]]
+  lowerBound <- bins[which(treated_unit_ids == treated_unit_id), ,1]
+  higherBound<-bins[which(treated_unit_ids == treated_unit_id), ,2]
+  unit_dummy <-  data_dummy[treated_unit_id,]
+  count <- 1
+  colNames <- colnames(data)
+  for(cov in colNames){
+    if(cov == treated_column_name ||cov == outcome_column_name) next
+    if(is.factor(data[, cov])){
+      info <- mapCategoricalBoundsToOriginal(lowerBound,higherBound,cov,list_dummyCols[[count]],unit_dummy)
+      infoList[cov] <-info
+      count = count + 1
+    }
+    else{
+      lower = lowerBound[which(colnames(unit_dummy) == cov)]
+      higher = higherBound[which(colnames(unit_dummy) == cov)]
+      info <- printOneLineNumeric(cov,lower,higher);
+      infoList[cov] <-info
+    }
+  }
+  if(returnValue){
+    return (infoList)
+  }
+}
 
-print_box<-function(AHB_out, treated_unit_id){
+mapCategoricalBoundsToOriginal<-function(lb,hb,colName,colsDummy,unit_dummy){
+  container <- c()
+  for(col in colsDummy){
+    index <- which(colnames(unit_dummy) == paste0(colName,"_",col))
+    if(unit_dummy[index] >= lb[index] && unit_dummy[index] <= hb[index]){
+      container<-append(container, col)
+    }
+  }
+  info <- printOneLineForFactor(colName, container)
+  return (info)
+}
 
+printOneLineForFactor <- function(colName, container){
+  info = paste(colName, "in {")
+  delimit = ""
+  i <- 1
+  for(c in container){
+    info = paste(info , c)
+    if(i != length(container)){
+      info = paste(info , ",")
+    }
+    i = i +1
+  }
+  info = paste(info , "}")
+  cat(paste("  ",info, "\n"))
+  return (info)
+}
+
+printOneLineNumeric <- function(colName, lower,higher){
+  info = paste(colName, "from ")
+  info = paste(info, sprintf("%.3f", lower), "to", sprintf("%.3f", higher))
+  cat(paste("  ", info, "\n"))
+  return(info)
 }

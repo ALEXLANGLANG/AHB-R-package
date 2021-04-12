@@ -9,7 +9,7 @@ AHB_MIP_match(
   holdout = 0.1,
   treated_column_name = "treated",
   outcome_column_name = "outcome",
-  black_box = "xgb",
+  PE_method = "xgb",
   user_PE_fit = NULL,
   user_PE_fit_params = NULL,
   user_PE_predict = NULL,
@@ -56,7 +56,7 @@ in data and holdout. Defaults to 'treated'.}
 \item{outcome_column_name}{A character with the name of the outcome column in
 holdout and also in data, if supplied in the latter. Defaults to 'outcome'.}
 
-\item{black_box}{Denotes the method to be used to generate outcome model Y.
+\item{PE_method}{Denotes the method to be used to generate outcome model Y.
 If "BART", use bartMachine as ML model to do prediction.
 If "xgb", use xgboost as ML model to do prediction.
  Defaults to '"BART"'.}
@@ -138,11 +138,13 @@ information to impute covariates when \code{missing_data = 'impute'} or
 }
 \value{
 The basic object returned by \code{AHB_MIP_match} is a list of 5
- entries: \describe{\item{data}{Data set was matched by \code{AHB_MIP_match}.
+ entries: \describe{\item{data}{Clean data set after preprocessing was matched by \code{AHB_MIP_match}.
  If holdout is not a numeric value, the \code{AHB_MIP_out$data} is the same
  as the data input into \code{AHB_MIP_match}.  If holdout is a numeric scalar
  between 0 and 1, \code{AHB_MIP_out$data} is the remaining proportion of data
- that were matched.} \item{units_id}{A integer vector with unit_id for test
+ that were matched.}
+ \item{data_dummy}{This is dummy version of \code{data}. AHB will convert all categorical data into dummies}
+  \item{units_id}{A integer vector with unit_id for test
  treated units} \item{CATE}{A numeric vector with the conditional average
  treatment effect estimates for every test treated unit in its matched group
  in \code{MGs}} \item{bins}{ An array of two lists where the first one
@@ -151,6 +153,8 @@ The basic object returned by \code{AHB_MIP_match} is a list of 5
  treated unit.} \item{MGs}{A list of all the matched groups formed by
  AHB_fast_match. For each test treated unit, each row contains all unit_id of
  the other units that fall into its box, including itself. } }
+ \item{list_dummyCols}{This is a list of dummy cols after mapping}
+ \item{verbose}{This is used for postprocessing. Contains \code{treated_column_name} and \code{outcome_column_name}}
 }
 \description{
 \code{AHB_MIP_match} runs a MIP Implementation of AHB Matching

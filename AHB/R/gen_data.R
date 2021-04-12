@@ -58,10 +58,16 @@ gen_mixedData<-function(n_units=100, p = 4){
   X_numeric <- matrix(runif(p_numeric * n_units, -5, 5), nrow = n_units)
   X_categorical <- matrix(rbinom(p_categorical * n_units, 1, 0.5), ncol = p_categorical, nrow = n_units)
   X_categorical[,1]<-"male"
-  X_categorical[c(1,2,3,4,5),1] <-"female"
+  X_categorical[c(1,2,3,4,5,6,7,8),1] <-"female"
+  X_categorical[,2]<-"1"
+  X_categorical[c(1,2,3,4,5,6,7,8),2] <-"2"
+  X_categorical[c(9:15),2] <-"3"
   ## Generate outcome
   eps <- rnorm(n_units, 0, 1)
   Z <- rbinom(n_units, 1, 0.5)
+  X_numeric[, 1] <-  matrix(runif(n_units, 1000, 10000), nrow = n_units)
+  X_numeric[, 2] <- matrix(runif(n_units, 0, 1000), nrow = n_units)
+
   Y1 <- beta0 + (X_numeric[, 1] > 1.5) * beta_tilde + eps
   Y0 <- beta0  + eps
   Y = Y1 * Z + Y0 * (1-Z)
@@ -69,6 +75,10 @@ gen_mixedData<-function(n_units=100, p = 4){
   df <- cbind(data.frame(X_numeric),data.frame(X_categorical))
   colnames(df)<-NULL
   df <- cbind(df,data.frame(outcome = Y, treated = Z))
+  if (p==4){
+    colnames(df)<- c("salary", "payment on books", "gender", "the number of children",
+                     "outcome", "treated")
+  }
   return(data = df)
 }
 

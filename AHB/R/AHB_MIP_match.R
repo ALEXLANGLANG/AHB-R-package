@@ -40,7 +40,7 @@
 #'@param outcome_column_name A character with the name of the outcome column in
 #'  holdout and also in data, if supplied in the latter. Defaults to 'outcome'.
 #'
-#'@param black_box Denotes the method to be used to generate outcome model Y.
+#'@param PE_method Denotes the method to be used to generate outcome model Y.
 #' If "BART", use bartMachine as ML model to do prediction.
 #' If "xgb", use xgboost as ML model to do prediction.
 #'  Defaults to '"BART"'.
@@ -108,7 +108,6 @@
 #'   units with missingness and does not use them to compute PE; and if 'impute',
 #'   imputes the missing data via \code{mice::mice}. In this last case, the PE
 #'   at an iteration will be given by the average PE across all imputations.
-#'
 #' @param impute_with_treatment A logical scalar. If \code{TRUE}, uses treatment
 #'   assignment to impute covariates when \code{missing_data = 'impute'} or
 #'   \code{missing_holdout = 'impute'}. Defaults to \code{TRUE}.
@@ -117,11 +116,13 @@
 #'   \code{missing_holdout = 'impute'}. Defaults to \code{FALSE}.
 #'
 #'@return The basic object returned by \code{AHB_MIP_match} is a list of 5
-#'  entries: \describe{\item{data}{Data set was matched by \code{AHB_MIP_match}.
+#'  entries: \describe{\item{data}{Clean data set after preprocessing was matched by \code{AHB_MIP_match}.
 #'  If holdout is not a numeric value, the \code{AHB_MIP_out$data} is the same
 #'  as the data input into \code{AHB_MIP_match}.  If holdout is a numeric scalar
 #'  between 0 and 1, \code{AHB_MIP_out$data} is the remaining proportion of data
-#'  that were matched.} \item{units_id}{A integer vector with unit_id for test
+#'  that were matched.}
+#'  \item{data_dummy}{This is dummy version of \code{data}. AHB will convert all categorical data into dummies}
+#'   \item{units_id}{A integer vector with unit_id for test
 #'  treated units} \item{CATE}{A numeric vector with the conditional average
 #'  treatment effect estimates for every test treated unit in its matched group
 #'  in \code{MGs}} \item{bins}{ An array of two lists where the first one
@@ -130,6 +131,8 @@
 #'  treated unit.} \item{MGs}{A list of all the matched groups formed by
 #'  AHB_fast_match. For each test treated unit, each row contains all unit_id of
 #'  the other units that fall into its box, including itself. } }
+#'  \item{list_dummyCols}{This is a list of dummy cols after mapping}
+#'  \item{verbose}{This is used for postprocessing. Contains \code{treated_column_name} and \code{outcome_column_name}}
 
 #'@importFrom stats  predict rbinom rnorm var formula runif sd complete.cases
 #'@importFrom utils combn flush.console read.csv
@@ -141,7 +144,7 @@ AHB_MIP_match<-function(data,
                         holdout = 0.1,
                         treated_column_name = 'treated',
                         outcome_column_name = 'outcome',
-                        black_box="xgb",
+                        PE_method="xgb",
                         user_PE_fit = NULL, user_PE_fit_params = NULL,
                         user_PE_predict = NULL, user_PE_predict_params = NULL,
                         cv=F,gamma0=3, gamma1=3, beta=2,m=1,M=1e5,
@@ -153,13 +156,11 @@ AHB_MIP_match<-function(data,
                         impute_with_treatment = TRUE, impute_with_outcome = FALSE
                         ){
 
-  df <- read_data(data = data, holdout = holdout,
-                  treated_column_name = treated_column_name, outcome_column_name = outcome_column_name)
-
-  # check_args_MIP(data = df[[1]], holdout = df[[2]],
-  #                treated_column_name = treated_column_name, outcome_column_name = outcome_column_name,
-  #                black_box = black_box, cv = cv, gamma0 = gamma0, gamma1 = gamma1, beta = beta, m = m, M = M)
-
+  df <- read_data(data = data, holdout = holdout)
+  check_args_MIP(df[[1]],df[[2]], treated_column_name, outcome_column_name,
+                 PE_method, user_PE_fit, user_PE_fit_params,
+                 user_PE_predict, user_PE_predict_params,
+                 cv,gamma0, gamma1, beta,m,M,n_prune, MIP_solver)
   # get outcome model with train set
   df[[2]] <- mapCategoricalToFactor(df[[2]],treated_column_name, outcome_column_name)
   df[[1]] <- mapCategoricalToFactor(df[[1]],treated_column_name, outcome_column_name)
@@ -178,7 +179,7 @@ AHB_MIP_match<-function(data,
                              user_PE_fit = user_PE_fit, user_PE_fit_params = user_PE_fit_params,
                              user_PE_predict = user_PE_predict, user_PE_predict_params = user_PE_predict_params,
                              treated_column_name= treated_column_name, outcome_column_name=outcome_column_name,
-                             black_box =  black_box, cv = cv)
+                             black_box =  PE_method, cv = cv)
   n_train = inputs[[3]]
   p = inputs[[4]]
   test_df = inputs[[9]]
@@ -200,7 +201,7 @@ AHB_MIP_match<-function(data,
   }
   fhat1 <- do.call(PE_predict, c(list(bart_fit1, as.matrix(test_covs)), PE_predict_params))
   fhat0 <- do.call(PE_predict, c(list(bart_fit0, as.matrix(test_covs)), PE_predict_params))
-  if(black_box=='BART' && is.null(user_PE_predict) && is.null(user_PE_fit)){
+  if(PE_method=='BART' && is.null(user_PE_predict) && is.null(user_PE_fit)){
     fhat1<- colMeans(fhat1)
     fhat0<- colMeans(fhat0)
   }
@@ -280,7 +281,7 @@ For now, n_prune = ", n_prune, ". Try to set n_prune below 400 or even smaller")
   end_time <- Sys.time()
   t = difftime(end_time, start_time, units = "auto")
   message(paste0("Time to match ", length(test_treated), " units: ", format(round(t, 2), nsmall = 2)))
-  return(list(data = test_, data_dummy = test_df,units_id = test_treated, CATE = mip_cates, bins = mip_bins, MGs = mip_groups, list_dummyCols = list_dummyCols,verbose = c(treated_column_name,outcome_column_name)))
+  return(list(data = test_, data_dummy = test_df,treated_unit_ids = test_treated, CATE = mip_cates, bins = mip_bins, MGs = mip_groups, list_dummyCols = list_dummyCols,verbose = c(treated_column_name,outcome_column_name)))
 }
 
 

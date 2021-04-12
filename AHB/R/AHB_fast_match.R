@@ -106,7 +106,7 @@ preprocess_covs <- function(cands, test_covs){
 #'@param outcome_column_name A character with the name of the outcome column in
 #'  holdout and also in data, if supplied in the latter. Defaults to 'outcome'.
 #'
-#'@param black_box Denotes the method to be used to generate outcome model Y.
+#'@param PE_method Denotes the method to be used to generate outcome model Y.
 #' If "BART", use bart in dbarts as ML model to do prediction.
 #' If "xgb, use xgboost as ML model to do prediction.
 #'  Defaults to "BART".
@@ -137,8 +137,15 @@ preprocess_covs <- function(cands, test_covs){
 #'  encourages coarser bins while lower C encourages finer ones. The user should
 #'  analyze the data with multiple values of C to see how robust results are to
 #'  its choice.
-#'@param n_prune A numeric value, the number of candidate units selected to
-#'  construct the box. Defualt n_prune = 50.
+#'@param n_prune A numeric value, the number of candidate units selected to run
+#'  the mip on for constructing the box. Dataset mentioned below is refered to
+#'  the dataset for matching. If you match a small dataset with the number of
+#'  units smaller than 400, it will run MIP on all dataset for each treated
+#'  unit. If you match larger dataset and your memory of your computer cannot
+#'  support such much computation, plase adjust n_prune below 400 or even
+#'  smaller. The smaller number of candidate units selected to run the mip on
+#'  for constructing the box, the faster this program runs.Defualt n_prune =
+#'  0.1* nrow(dataset).
 #'
 #'
 #' @param missing_data Specifies how to handle missingness in \code{data}. If
@@ -150,7 +157,6 @@ preprocess_covs <- function(cands, test_covs){
 #'   units with missingness and does not use them to compute PE; and if 'impute',
 #'   imputes the missing data via \code{mice::mice}. In this last case, the PE
 #'   at an iteration will be given by the average PE across all imputations.
-#'
 #' @param impute_with_treatment A logical scalar. If \code{TRUE}, uses treatment
 #'   assignment to impute covariates when \code{missing_data = 'impute'} or
 #'   \code{missing_holdout = 'impute'}. Defaults to \code{TRUE}.
@@ -158,22 +164,24 @@ preprocess_covs <- function(cands, test_covs){
 #'   information to impute covariates when \code{missing_data = 'impute'} or
 #'   \code{missing_holdout = 'impute'}. Defaults to \code{FALSE}.
 #'
-#'@return The basic object returned by \code{AHB_fast_match} is a list of 5
-#'  entries: \describe{\item{data}{Data set was matched by
-#'  \code{AHB_fast_match}. If holdout is not a numeric value, the
-#'  \code{AHB_fast_out$data} is the same as the data input into
-#'  \code{AHB_fast_match}.  If holdout is a numeric scalar between 0 and 1,
-#'  \code{AHB_fast_out$data} is the remaining proportion of data that were
-#'  matched.} \item{units_id}{A integer vector with unit_id for test treated
-#'  units} \item{CATE}{A numeric vector with the conditional average treatment
-#'  effect estimates for every test treated unit in its matched group in
-#'  \code{MGs}} \item{bins}{ An array of two lists where the first one contains
-#'  lower bounds and the other contains upper bounds for each test treated unit.
-#'  Each row of each list is a vector corresponding to a test treated unit.}
-#'  \item{MGs}{A list of all the matched groups formed by AHB_fast_match. For
-#'  each test treated unit, each row contains all unit_id of the other units
-#'  that fall into its box, including itself. } }
-
+#'@return The basic object returned by \code{AHB_MIP_match} is a list of 5
+#'  entries: \describe{\item{data}{Clean data set after preprocessing was matched by \code{AHB_MIP_match}.
+#'  If holdout is not a numeric value, the \code{AHB_MIP_out$data} is the same
+#'  as the data input into \code{AHB_MIP_match}.  If holdout is a numeric scalar
+#'  between 0 and 1, \code{AHB_MIP_out$data} is the remaining proportion of data
+#'  that were matched.}
+#'  \item{data_dummy}{This is dummy version of \code{data}. AHB will convert all categorical data into dummies}
+#'   \item{units_id}{A integer vector with unit_id for test
+#'  treated units} \item{CATE}{A numeric vector with the conditional average
+#'  treatment effect estimates for every test treated unit in its matched group
+#'  in \code{MGs}} \item{bins}{ An array of two lists where the first one
+#'  contains lower bounds and the other contains upper bounds for each test
+#'  treated unit. Each row of each list is a vector corresponding to a test
+#'  treated unit.} \item{MGs}{A list of all the matched groups formed by
+#'  AHB_fast_match. For each test treated unit, each row contains all unit_id of
+#'  the other units that fall into its box, including itself. } }
+#'  \item{list_dummyCols}{This is a list of dummy cols after mapping}
+#'  \item{verbose}{This is used for postprocessing. Contains \code{treated_column_name} and \code{outcome_column_name}}
 
 #'@importFrom stats  predict rbinom rnorm var formula runif complete.cases
 #'@importFrom utils combn flush.console
@@ -185,7 +193,7 @@ AHB_fast_match<-function(data,
                          holdout = 0.1,
                          treated_column_name = 'treated',
                          outcome_column_name = 'outcome',
-                         black_box = "xgb",
+                         PE_method = "BART",
                          user_PE_fit = NULL, user_PE_fit_params = NULL,
                          user_PE_predict = NULL, user_PE_predict_params = NULL,
                          cv = F,
@@ -197,10 +205,11 @@ AHB_fast_match<-function(data,
                          impute_with_treatment = TRUE, impute_with_outcome = FALSE
                          ){
 
-  df <- read_data(data,holdout,treated_column_name,outcome_column_name)
-  # check_args_fast(data = df[[1]],holdout = df[[2]],
-  #                 treated_column_name=treated_column_name, outcome_column_name=outcome_column_name,
-  #                 black_box = black_box, cv = cv, C = C)
+  df <- read_data(data,holdout)
+  check_args_fast(df[[1]],df[[2]], treated_column_name, outcome_column_name,
+                 PE_method, user_PE_fit, user_PE_fit_params,
+                 user_PE_predict, user_PE_predict_params,cv,C,n_prune)
+
   df[[2]] <- mapCategoricalToFactor(df[[2]],treated_column_name, outcome_column_name)
   df[[1]] <- mapCategoricalToFactor(df[[1]],treated_column_name, outcome_column_name)
   train_ <-handle_missing(df[[2]], "training dataset", missing_holdout,
@@ -218,7 +227,7 @@ AHB_fast_match<-function(data,
                              user_PE_fit = user_PE_fit, user_PE_fit_params = user_PE_fit_params,
                              user_PE_predict = user_PE_predict, user_PE_predict_params = user_PE_predict_params,
                              treated_column_name= treated_column_name, outcome_column_name=outcome_column_name,
-                             black_box =  black_box, cv = cv)
+                             black_box =  PE_method, cv = cv)
 
   p = inputs[[4]]
   test_df = inputs[[9]]
@@ -255,12 +264,12 @@ For now, n_prune = ", n_prune, ". Try to set n_prune below 400 or even smaller")
   }
   fhat1 <- do.call(PE_predict, c(list(bart_fit1, as.matrix(test_covs)), PE_predict_params))
   fhat0 <- do.call(PE_predict, c(list(bart_fit0, as.matrix(test_covs)), PE_predict_params))
-  if(black_box=='BART' && is.null(user_PE_predict) && is.null(user_PE_fit)){
+  if(PE_method=='BART' && is.null(user_PE_predict) && is.null(user_PE_fit)){
     fhat1<- colMeans(fhat1)
     fhat0<- colMeans(fhat0)
   }
 
-  greedy_out<-greedy_cpp(names(test_covs),black_box, as.matrix(test_covs[test_treated, ]), test_control-1, test_treated-1,
+  greedy_out<-greedy_cpp(names(test_covs),PE_method, as.matrix(test_covs[test_treated, ]), test_control-1, test_treated-1,
                          as.matrix(test_covs), as.logical(test_df_treated), test_df_outcome,
                          1, 15, C,user_PE_fit, user_PE_predict, PE_predict, bart_fit0, bart_fit1,
                          fhat0, fhat1, expansion_variance_tmp,
@@ -274,5 +283,5 @@ For now, n_prune = ", n_prune, ". Try to set n_prune below 400 or even smaller")
   end_time <- Sys.time()
   t = difftime(end_time, start_time, units = "auto")
   message(paste0("Time to match ", length(test_treated), " units: ", format(round(t, 2), nsmall = 2) ))
-  return(list(data = test_, data_dummy = test_df,units_id = test_treated, CATE = fast_cates, bins = fast_bins, MGs = MGs,list_dummyCols = list_dummyCols, verbose = c(treated_column_name,outcome_column_name)))
+  return(list(data = test_, data_dummy = test_df,treated_unit_ids = test_treated, CATE = fast_cates, bins = fast_bins, MGs = MGs,list_dummyCols = list_dummyCols, verbose = c(treated_column_name,outcome_column_name)))
 }

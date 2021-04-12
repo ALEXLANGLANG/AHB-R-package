@@ -1,6 +1,10 @@
 {
-    "path" : "~/Desktop/github/AHB-R-package/AHB/R",
+    "path" : "~/Desktop/github/AHB-R-package/AHB/tests/testthat",
     "sortOrder" : [
+        {
+            "ascending" : false,
+            "columnIndex" : 3
+        },
         {
             "ascending" : false,
             "columnIndex" : 2
